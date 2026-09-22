@@ -40,6 +40,9 @@
 #include <cerrno>
 #include <functional>
 #include <utility>
+#include <fstream>
+#include <iomanip>
+#include <cstdarg>
 
 //        __     _   
 //  ___ _/ /__ _(_)__
@@ -78,6 +81,7 @@
 
 
 typedef void* A_HOOK; //< shortname for void* basically
+typedef void(*pFnAlgisCallback)(void* data, size_t size);
 
 #if defined(_OS_WINDOWS)
 #ifndef NT_SUCCESS
@@ -108,6 +112,65 @@ typedef LONG NTSTATUS;
 #if !(defined _M_IX86) && !(defined _M_X64) && !(defined __i386__) && !(defined __x86_64__)
 #error "X86-64 are the only supported types."
 #endif
+
+class f_logger {
+private:
+    std::ofstream m_file;
+    std::mutex m_mutex;
+
+    f_logger() = default;
+    ~f_logger() {
+        if (m_file.is_open()) {
+            m_file.close();
+        }
+    }
+
+    f_logger(const f_logger&) = delete;
+    f_logger& operator=(const f_logger&) = delete;
+
+public:
+    static f_logger& g_instance() {
+        static f_logger instance;
+        return instance;
+    }
+
+    bool init(const std::string& filename) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_file.open(filename, std::ios::out | std::ios::app);
+        return m_file.is_open();
+    }
+
+    template <typename ... Args>
+    void log(const char* level, const char* format, Args... args) {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_file.is_open()) return;
+
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+
+        struct tm timeinfo;
+#if defined(_WIN32)
+        localtime_s(&timeinfo, &in_time_t);
+#else
+        localtime_r(&in_time_t, &timeinfo);
+#endif
+
+        char timeBuf[32];
+        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &timeinfo);
+
+        char msgBuf[1024];
+        std::snprintf(msgBuf, sizeof(msgBuf), format, args...);
+
+        m_file << "[" << timeBuf << "] [" << level << "] " << msgBuf << '\n';
+        m_file.flush();
+    }
+};
+
+/// TO USE LOG_INIT, DO LOG_INIT("log.log") OR LOG_INIT("C:\\Users\\public\\runtime.log");
+#define LOG_INIT(filename) f_logger::g_instance().init(filename)
+#define ILOG(fmt, ...)     f_logger::g_instance().log("INFO", fmt, ##__VA_ARGS__)
+#define WLOG(fmt, ...)     f_logger::g_instance().log("WARN", fmt, ##__VA_ARGS__)
+#define ELOG(fmt, ...)     f_logger::g_instance().log("ERROR", fmt, ##__VA_ARGS__)
 
 // main code begins here.
 
@@ -155,8 +218,12 @@ __attr_pack__ struct n_pipe {
     char magic[10]; // just enough to store "algis_ipc"
     uint32_t payloadSize;
     uint32_t msgType; // optional
-} __attr_pop__;
+}; __attr_pop__
 
+__attr_pack__ struct s_mem {
+    char magic[10]; // just enough to store "algis_ipc"
+    uint32_t payloadSize;
+}; __attr_pop__
 
 // the main namespace, where youll find most of your functions
 namespace algis
@@ -1485,6 +1552,7 @@ namespace algis
     * IN -> ipcName -> The exact name you put for your type of IPC, the name of your shared pipe or the name for the shared memory. !!BE EXACT!!
     * IN -> *data -> The data you want to send
     * IN -> dataSize -> The size of the data your putting in
+    * OPT -> seperateThread -> if you want to create your IPC in a seperate thread, use IPC_THREAD_CREATE
     */
     ALGIS_STATUS __stdcall xsend(int transportType, LPCWSTR ipcName, const void* data, size_t dataSize, bool seperateThread = false) {
         if (!ipcName || !data || dataSize == 0) {
@@ -1517,9 +1585,31 @@ namespace algis
     * OUT -> bytesRead -> Number of bytes actually read/recieved
     * IN -> timeoutMs -> Time in miliseconds to wait for data before timing out
     * OPT -> seperateThread -> if you want to create your IPC in a seperate thread, use IPC_THREAD_CREATE
+    * OPT -> callback -> for async use, an example would be void myCallback(void* data, size_t size) { // define my logic here } and use that as callback
     */
-    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs, bool seperateThread = false) {
-        return detail::_xrecieve_(transportType, ipcName, oBuffer, bufferSize, oBytesRead, timeoutMs);
+    template <typename Callback>
+    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs, pFnAlgisCallback callback = nullptr,bool seperateThread = false) {
+        if (seperateThread) {
+            if (!callback) return AL_INVALID_PARAMETER;
+
+            std::wstring nameCopy(ipcName);
+
+            std::thread([transportType, nameCopy, timeoutMs, callback]() {
+                std::vector<BYTE> localBuffer(4096);
+                DWORD bytesRead = 0;
+
+                ALGIS_STATUS status = detail::_xrecieve_(transportType, nameCopy.c_str(), localBuffer.data(), localBuffer.size(), &bytesRead, timeoutMs);
+                
+                if (status == ALGIS_OK && bytesRead > 0) {
+                    callback(localBuffer.data(), bytesRead);
+                }
+            }).detach();
+
+            return ALGIS_OK;
+        }
+        else {
+            return detail::_xrecieve_(transportType, ipcName, oBuffer, bufferSize, oBytesRead, timeoutMs);
+        }
     }
 #endif // @end external code
 
