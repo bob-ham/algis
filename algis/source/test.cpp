@@ -42,29 +42,35 @@ int main() {
 	return 0;
 } */
 
-/*
+
+void on_receive(void* data, size_t size) {
+	std::string message(static_cast<char*>(data), size);
+	std::cout << "\nrecieved " << size << " bytes: \"" << message << "\"\n";
+}
+
 int main() {
 	std::cout << "server started\n";
-
 
 	char buffer[256] = { 0 };
 	DWORD bytesRead = 0;
 	LPCWSTR pipeName = L"\\\\.\\pipe\\algis_data_pipe";
 
 	// this will block until a sender connects and writes data
-	ALGIS_STATUS status = algis::xrecieve(XPIPE, pipeName, buffer, sizeof(buffer) - 1, &bytesRead, 5000);
+	ALGIS_STATUS status = algis::xrecieve(XPIPE, pipeName, nullptr, 0, nullptr, INFINITE, on_receive, IPC_THREAD_CREATE);
 
 	if (status == ALGIS_OK) {
-		std::cout << "received " << bytesRead << " bytes: \"" << buffer << "\"\n";
+		printf("background thread spawned!\n");
 	}
 	else {
 		std::cerr << "failed to receive data. status: " << status << "\n";
 	}
 
-	std::cout << "press any key to exit...\n";
+	std::cout << "main thread is unblocked\n";
 	std::getchar();
 	return 0;
-}  SERVER CODE WORKS */
+}  
+
+/*
 
 int main() {
 	if (!LOG_INIT("algis_runtime.log")) {
@@ -77,4 +83,4 @@ int main() {
 
 
 	return 0;
-}
+} */

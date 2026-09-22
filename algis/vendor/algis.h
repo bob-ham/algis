@@ -1587,8 +1587,7 @@ namespace algis
     * OPT -> seperateThread -> if you want to create your IPC in a seperate thread, use IPC_THREAD_CREATE
     * OPT -> callback -> for async use, an example would be void myCallback(void* data, size_t size) { // define my logic here } and use that as callback
     */
-    template <typename Callback>
-    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs, pFnAlgisCallback callback = nullptr,bool seperateThread = false) {
+    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs, pFnAlgisCallback callback = nullptr, bool seperateThread = false) {
         if (seperateThread) {
             if (!callback) return AL_INVALID_PARAMETER;
 
