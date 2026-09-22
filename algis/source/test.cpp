@@ -56,7 +56,7 @@ int main() {
 		std::cout << "received " << bytesRead << " bytes: \"" << buffer << "\"\n";
 	}
 	else {
-		std::cerr << "[-] Failed to receive data. Status: " << status << "\n";
+		std::cerr << "failed to receive data. status: " << status << "\n";
 	}
 
 	std::cout << "press any key to exit...\n";

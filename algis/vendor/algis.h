@@ -1382,11 +1382,11 @@ namespace algis
 #if defined(ALGIS_EXTERNAL)
 // @begin external code
 /*
-* Initialize this library, call this only ONCE ever, at the beginning of your program.
-*
-* IN - *processName -> Name of the process you want to target.
-* Usage: if (EH_Initialize("RobloxPlayerBeta.exe") != EH_OK) { return; }
-*/
+    * Initialize this library, call this only ONCE ever, at the beginning of your program.
+    *
+    * IN - *processName -> Name of the process you want to target.
+    * Usage: if (EH_Initialize("RobloxPlayerBeta.exe") != EH_OK) { return; }
+    */
     ALGIS_STATUS __stdcall hk_init(const char* processName) {
         return detail::_al_hk_init(processName);
     }
@@ -1486,8 +1486,24 @@ namespace algis
     * IN -> *data -> The data you want to send
     * IN -> dataSize -> The size of the data your putting in
     */
-    ALGIS_STATUS __stdcall xsend(int transportType, LPCWSTR ipcName, const void* data, size_t dataSize) {
-        return detail::_xsend_(transportType, ipcName, data, dataSize);
+    ALGIS_STATUS __stdcall xsend(int transportType, LPCWSTR ipcName, const void* data, size_t dataSize, bool seperateThread = false) {
+        if (!ipcName || !data || dataSize == 0) {
+            return AL_INVALID_PARAMETER;
+        }
+
+        if (seperateThread) {
+            std::vector<BYTE> dataCopy(static_cast<const BYTE*>(data), static_cast<const BYTE*>(data) + dataSize);
+            std::wstring nameCopy(ipcName);
+
+            std::thread([transportType, nameCopy, dataCopy]() {
+                detail::_xsend_(transportType, nameCopy.c_str(), dataCopy.data(), dataCopy.size());
+            }).detach();
+
+            return ALGIS_OK;
+        }
+        else {
+            return detail::_xsend_(transportType, ipcName, data, dataSize);
+        }
     }
 
     /*
@@ -1500,8 +1516,9 @@ namespace algis
     * IN -> bufferSize -> Capacity of output buffer
     * OUT -> bytesRead -> Number of bytes actually read/recieved
     * IN -> timeoutMs -> Time in miliseconds to wait for data before timing out
+    * OPT -> seperateThread -> if you want to create your IPC in a seperate thread, use IPC_THREAD_CREATE
     */
-    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs) {
+    ALGIS_STATUS __stdcall xrecieve(int transportType, LPCWSTR ipcName, void* oBuffer, size_t bufferSize, DWORD* oBytesRead, DWORD timeoutMs, bool seperateThread = false) {
         return detail::_xrecieve_(transportType, ipcName, oBuffer, bufferSize, oBytesRead, timeoutMs);
     }
 #endif // @end external code
