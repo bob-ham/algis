@@ -3,7 +3,7 @@
 
 
 // I would recomend to do "using namespace algis"
-/*
+
 int main() {
 
 	void* QPC = GetProcAddress(GetModuleHandleA("Kernel32.dll"), "QueryPerformanceCounter");
@@ -17,7 +17,7 @@ int main() {
 	}
 	printf("test 1 passed, test 2\n");
 	uintptr_t entryPoint = 0;
-	const wchar_t* dllPath = L"C:\\Users\\cheese\\source\\repos\\algis\\x64\\Release\\exthk.dll";
+	const wchar_t* dllPath = L"C:\\Users\\cheese\\source\\repos\\algis\\x64\\Release\\algisdlltest.dll";
 
 	if (algis::map(dllPath, &entryPoint) != ALGIS_OK){
 		printf("IMap failed\n");
@@ -40,9 +40,9 @@ int main() {
 	algis::hk_uninit();
 
 	return 0;
-} */
+} 
 
-
+/*
 void on_receive(void* data, size_t size) {
 	std::string message(static_cast<char*>(data), size);
 	std::cout << "\nrecieved " << size << " bytes: \"" << message << "\"\n";
@@ -70,7 +70,7 @@ int main() {
 	return 0;
 }  
 
-/*
+
 
 int main() {
 	if (!LOG_INIT("algis_runtime.log")) {

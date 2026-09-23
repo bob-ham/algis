@@ -7,6 +7,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "algis", "algis\algis.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test1", "test1\test1.vcxproj", "{0A912DB5-C576-4629-9BA7-877172174DCE}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "algisdlltest", "algisdlltest\algisdlltest.vcxproj", "{BC63D394-5390-4CAF-B056-82E014AFC87F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -31,6 +33,14 @@ Global
 		{0A912DB5-C576-4629-9BA7-877172174DCE}.Release|x64.Build.0 = Release|x64
 		{0A912DB5-C576-4629-9BA7-877172174DCE}.Release|x86.ActiveCfg = Release|Win32
 		{0A912DB5-C576-4629-9BA7-877172174DCE}.Release|x86.Build.0 = Release|Win32
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Debug|x64.ActiveCfg = Debug|x64
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Debug|x64.Build.0 = Debug|x64
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Debug|x86.ActiveCfg = Debug|Win32
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Debug|x86.Build.0 = Debug|Win32
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Release|x64.ActiveCfg = Release|x64
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Release|x64.Build.0 = Release|x64
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Release|x86.ActiveCfg = Release|Win32
+		{BC63D394-5390-4CAF-B056-82E014AFC87F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

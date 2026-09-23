@@ -115,14 +115,18 @@ typedef LONG NTSTATUS;
 
 class f_logger {
 private:
-    std::ofstream m_file;
-    std::mutex m_mutex;
+    HANDLE m_file;
+    CRITICAL_SECTION m_cs;
 
-    f_logger() = default;
+    f_logger() : m_file(INVALID_HANDLE_VALUE) {
+        InitializeCriticalSection(&m_cs);
+    }
+
     ~f_logger() {
-        if (m_file.is_open()) {
-            m_file.close();
+        if (m_file != INVALID_HANDLE_VALUE) {
+            CloseHandle(m_file);
         }
+        DeleteCriticalSection(&m_cs);
     }
 
     f_logger(const f_logger&) = delete;
@@ -130,20 +134,40 @@ private:
 
 public:
     static f_logger& g_instance() {
-        static f_logger instance;
-        return instance;
+        static f_logger* instance = nullptr;
+        if (!instance) {
+            instance = new f_logger();
+        }
+        return *instance;
     }
 
+    
+
     bool init(const std::string& filename) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_file.open(filename, std::ios::out | std::ios::app);
-        return m_file.is_open();
+        EnterCriticalSection(&m_cs);
+        if (m_file != INVALID_HANDLE_VALUE) {
+            CloseHandle(m_file);
+        }
+        m_file = CreateFileA(
+            filename.c_str(),
+            FILE_APPEND_DATA,
+            FILE_SHARE_READ,
+            NULL,
+            OPEN_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL
+        );
+        LeaveCriticalSection(&m_cs);
+        return m_file != INVALID_HANDLE_VALUE;
     }
 
     template <typename ... Args>
     void log(const char* level, const char* format, Args... args) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!m_file.is_open()) return;
+        EnterCriticalSection(&m_cs);
+        if (m_file == INVALID_HANDLE_VALUE) {
+            LeaveCriticalSection(&m_cs);
+            return;
+        }
 
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -161,8 +185,16 @@ public:
         char msgBuf[1024];
         std::snprintf(msgBuf, sizeof(msgBuf), format, args...);
 
-        m_file << "[" << timeBuf << "] [" << level << "] " << msgBuf << '\n';
-        m_file.flush();
+        char finalBuf[2048];
+        int len = std::snprintf(finalBuf, sizeof(finalBuf), "[%s] [%s] %s\n", timeBuf, level, msgBuf);
+
+        if (len > 0) {
+            DWORD written = 0;
+            WriteFile(m_file, finalBuf, (DWORD)len, &written, NULL);
+            FlushFileBuffers(m_file);
+        }
+
+        LeaveCriticalSection(&m_cs);
     }
 };
 
@@ -943,11 +975,14 @@ namespace algis
                 bool isEnabled;
             };
 
-            inline std::vector<HookEntry> g_Hooks;
+            inline std::vector<HookEntry>& GetHookList() {
+                static std::vector<HookEntry> hooks;
+                return hooks;
+            }
 
             inline bool IsDataCaveOverlap(uintptr_t start, size_t size) {
                 uintptr_t end = start + size;
-                for (const auto& entry : g_Hooks) {
+                for (const auto& entry : GetHookList()) {
                     if (entry.customVmt) {
                         uintptr_t usedStart = reinterpret_cast<uintptr_t>(&(entry.customVmt[-2]));
                         uintptr_t usedEnd = usedStart + ((entry.totalCount + 2) * sizeof(void*));
@@ -987,10 +1022,15 @@ namespace algis
             }
 
             inline size_t GetVMTSizeDynamic(void** vmt) {
-                static uintptr_t textStart = 0, textEnd = 0;
-                if (!textStart) {
-                    GetTextSectionRange((uintptr_t)GetModuleHandleA(NULL), textStart, textEnd);
+                if (!vmt || !vmt[0]) return 0;
+
+                HMODULE hModule = NULL;
+                if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)vmt[0], &hModule)) {
+                    return 0;
                 }
+
+                uintptr_t textStart = 0, textEnd = 0;
+                GetTextSectionRange((uintptr_t)hModule, textStart, textEnd);
 
                 if (!textStart || !vmt) {
                     return 0;
@@ -1052,7 +1092,7 @@ namespace algis
             }
 
             inline HookEntry* FindHookEntry(void* detour) {
-                for (auto& entry : g_Hooks) {
+                for (auto& entry : GetHookList()) {
                     if (entry.detour == detour) {
                         return &entry;
                     }
@@ -1081,20 +1121,14 @@ namespace algis
                     return false;
                 }
 
-                uintptr_t gameModule = (uintptr_t)GetModuleHandleA(NULL);
                 size_t totalVmtBytes = (totalCount + 2) * sizeof(void*);
 
-                uintptr_t dataCaveRaw = FindGameDataCave(gameModule, totalVmtBytes);
-                if (!dataCaveRaw) {
+                void* allocatedMem = VirtualAlloc(NULL, totalVmtBytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+                if (!allocatedMem) {
                     return false;
                 }
 
-                // Ensure the Data Cave memory page is writable
-                DWORD oldProtect = 0;
-                if (!VirtualProtect((LPVOID)dataCaveRaw, totalVmtBytes, PAGE_READWRITE, &oldProtect)) {
-                    return false;
-                }
-
+                uintptr_t dataCaveRaw = reinterpret_cast<uintptr_t>(allocatedMem);
                 void** shadowVMTBuffer = reinterpret_cast<void**>(dataCaveRaw);
 
                 shadowVMTBuffer[0] = originalVmt[-2];
@@ -1103,9 +1137,6 @@ namespace algis
                 void** customVmt = &shadowVMTBuffer[2];
                 std::memcpy(customVmt, originalVmt, totalCount * sizeof(void*));
                 customVmt[index] = detour;
-
-                // Restore original protection on Data Cave page
-                VirtualProtect((LPVOID)dataCaveRaw, totalVmtBytes, oldProtect, &oldProtect);
 
                 if (outOriginal) {
                     *outOriginal = originalVmt[index];
@@ -1121,7 +1152,7 @@ namespace algis
                 entry.totalCount = totalCount;
                 entry.isEnabled = false;
 
-                g_Hooks.push_back(entry);
+                GetHookList().push_back(entry);
                 return true;
             }
 
@@ -1162,7 +1193,8 @@ namespace algis
             }
 
             inline bool RemoveHook(void* detour) {
-                for (auto it = g_Hooks.begin(); it != g_Hooks.end(); ++it) {
+                auto& list = GetHookList();
+                for (auto it = list.begin(); it != list.end(); ++it) {
                     if (it->detour == detour) {
                         if (it->isEnabled) {
                             DWORD oldProtect = 0;
@@ -1181,7 +1213,7 @@ namespace algis
                             VirtualProtect(shadowBuffer, totalBytes, oldProtect, &oldProtect);
                         }
 
-                        g_Hooks.erase(it);
+                        list.erase(it);
                         return true;
                     }
                 }
@@ -1196,9 +1228,10 @@ namespace algis
 
         // _create_tp_
         inline ALGIS_STATUS _create_tp_(PTP_WORK_CALLBACK callback, PVOID context = NULL) {
-            PTP_WORK work = CreateThreadPoolWork(callback, context, NULL);
+            PTP_WORK work = CreateThreadpoolWork(callback, context, NULL);
             if (work) {
                 SubmitThreadpoolWork(work);
+                return ALGIS_OK;
             }
         }
 
@@ -1625,19 +1658,19 @@ namespace algis
     }
 
     BOOL createVHook(void* detour, void* classInstance, size_t index, void** oOriginal = nullptr) {
-        return _createVHook_(detour, classInstance, index, oOriginal);
+        return detail::_createVHook_(detour, classInstance, index, oOriginal);
     }
 
     BOOL enableVHook(void* detour) {
-        return _enableVHook_(detour);
+        return detail::_enableVHook_(detour);
     }
 
     BOOL removeVHook(void* detour) {
-        return _removeVHook_(detour);
+        return detail::_removeVHook_(detour);
     }
 
     void* getVOrignal(void* detour) {
-        return _getVOrignal_(detour);
+        return detail::_getVOrignal(detour);
     }
 
 #endif //< @end internal helpers
