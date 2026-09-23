@@ -4,6 +4,7 @@
 
 // I would recomend to do "using namespace algis"
 
+/*
 int main() {
 
 	void* QPC = GetProcAddress(GetModuleHandleA("Kernel32.dll"), "QueryPerformanceCounter");
@@ -41,8 +42,10 @@ int main() {
 
 	return 0;
 } 
+*/
 
 /*
+
 void on_receive(void* data, size_t size) {
 	std::string message(static_cast<char*>(data), size);
 	std::cout << "\nrecieved " << size << " bytes: \"" << message << "\"\n";
@@ -69,9 +72,58 @@ int main() {
 	std::getchar();
 	return 0;
 }  
+*/
 
 
+void reciver_thread(LPCWSTR ipcName) {
+	std::wcout << L"starting and waiting for data on: " << ipcName << std::endl;
 
+	char recieveBuffer[256] = { 0 };
+	DWORD bytesRead = 0;
+
+	ALGIS_STATUS status = algis::xrecieve(XSMEM, ipcName, recieveBuffer, sizeof(recieveBuffer) - 1, &bytesRead, 5000);
+
+	if (status == ALGIS_OK) {
+		std::cout << "success, received " << bytesRead << " bytes" << std::endl;
+		std::cout << "data content: " << recieveBuffer << std::endl;
+	}
+	else {
+		std::cerr << "failed with status code: " << status << std::endl;
+	}
+}
+
+void sender_thread(LPCWSTR ipcName) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+	std::string message = "algis shared memory test";
+	std::wcout << L"sending message to: " << ipcName << std::endl;
+
+	ALGIS_STATUS status = algis::xsend(XSMEM, ipcName, message.c_str(), message.size() + 1);
+
+	if (status == ALGIS_OK) {
+		std::cout << "data send succesfully\n";
+	}
+	else {
+		std::cerr << "send failed with status code: " << status << std::endl;
+	}
+}
+
+int main() {
+	LPCWSTR IpcName = L"Local\\AlgisSharedMemory";
+
+	std::cout << "shared memory test\n";
+
+	std::thread receiver(reciver_thread, IpcName);
+	std::thread sender(sender_thread, IpcName);
+
+	receiver.join();
+	sender.join();
+
+	std::cout << "test completed\n";
+	return 0;
+}
+
+/*
 int main() {
 	if (!LOG_INIT("algis_runtime.log")) {
 		return -1;

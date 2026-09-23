@@ -204,6 +204,8 @@ public:
 #define WLOG(fmt, ...)     f_logger::g_instance().log("WARN", fmt, ##__VA_ARGS__)
 #define ELOG(fmt, ...)     f_logger::g_instance().log("ERROR", fmt, ##__VA_ARGS__)
 
+
+
 // main code begins here.
 
 // main enum
@@ -245,6 +247,39 @@ typedef enum _ALGIS_STATUS : uint32_t {
     // error for internal errors
     AL_INTERNAL_UNKNOWN_SYSTEM_ERROR
 } ALGIS_STATUS;
+
+// Enum helper to debug
+inline const char* statustostring(ALGIS_STATUS status) {
+    switch (status) {
+    case ALGIS_OK: return "ALGIS_OK";
+    case AL_PROCESS_NOT_FOUND: return "AL_PROCESS_NOT_FOUND";
+    case AL_HANDLE_NOT_FOUND: return "AL_HANDLE_NOT_FOUND";
+    case AL_INVALID_ADDRESS: return "AL_INVALID_ADDRESS";
+    case AL_INVALID_PARAMETER: return "AL_INVALID_PARAMETER";
+    case AL_OOM: return "AL_OOM";
+    case AL_ALREADY_EXISTS: return "AL_ALREADY_EXISTS";
+    case AL_TIMEOUT: return "AL_TIMEOUT";
+    case AL_FILE_NOT_FOUND: return "AL_FILE_NOT_FOUND";
+    case AL_ERR_MAPPING_FAILED: return "AL_ERR_MAPPING_FAILED";
+    case AL_HOOK_FAILED: return "AL_HOOK_FAILED";
+    case AL_MAPPING_CREATE_FAILED: return "AL_MAPPING_CREATE_FAILED";
+    case AL_MAPPING_OPEN_FAILED: return "AL_MAPPING_OPEN_FAILED";
+    case AL_MAP_VIEW_FAILED: return "AL_MAP_VIEW_FAILED";
+    case AL_UNMAP_VIEW_FAILED: return "AL_UNMAP_VIEW_FAILED";
+    case AL_WAIT_TIMEOUT: return "AL_WAIT_TIMEOUT";
+    case AL_CREATE_FAILED: return "AL_CREATE_FAILED";
+    case AL_CONNECT_FAILED: return "AL_CONNECT_FAILED";
+    case AL_BUSY: return "AL_BUSY";
+    case AL_BROKEN: return "AL_BROKEN";
+    case AL_DISCONNECTED: return "AL_DISCONNECTED";
+    case AL_MORE_DATA_AVAILABLE: return "AL_MORE_DATA_AVAILABLE";
+    case AL_MODE_CHANGE_FAILED: return "AL_MODE_CHANGE_FAILED";
+    case AL_WRITE_FAILED: return "AL_WRITE_FAILED";
+    case AL_READ_FAILED: return "AL_READ_FAILED";
+    case AL_INTERNAL_UNKNOWN_SYSTEM_ERROR: return "AL_INTERNAL_UNKNOWN_SYSTEM_ERROR";
+    default: return "UNKNOWN_ALGIS_STATUS";
+    }
+}
 
 __attr_pack__ struct n_pipe {
     char magic[10]; // just enough to store "algis_ipc"
@@ -1369,7 +1404,99 @@ namespace algis
         return ALGIS_OK;
     }
 
+    ALGIS_STATUS __stdcall _createSMem_(LPCWSTR memName, int bufferSize, HANDLE* oHandle, void** oBuffer) {
+        if (!memName || bufferSize <= 0 || !oHandle || !oBuffer) {
+            return AL_INVALID_PARAMETER;
+        }
 
+        *oHandle = NULL;
+        *oBuffer = NULL;
+
+        HANDLE hMap = CreateFileMappingW(
+            INVALID_HANDLE_VALUE,
+            NULL,
+            PAGE_READWRITE,
+            0,
+            static_cast<DWORD>(bufferSize),
+            memName
+        );
+
+        if (hMap == NULL) {
+            return AL_MAPPING_CREATE_FAILED;
+        }
+
+        void* pBuf = MapViewOfFile(
+            hMap,
+            FILE_MAP_ALL_ACCESS,
+            0,0,
+            bufferSize
+        );
+
+        if (pBuf == NULL) {
+            CloseHandle(hMap);
+            return AL_MAP_VIEW_FAILED;
+        }
+
+        *oHandle = hMap;
+        *oBuffer = pBuf;
+        return ALGIS_OK;
+    }
+
+    ALGIS_STATUS __stdcall _openSMem_(LPCWSTR memName, int bufferSize, HANDLE* oHandle, void** oBuffer) {
+        if (!memName || bufferSize <= 0 || !oHandle || !oBuffer) {
+            return AL_INVALID_PARAMETER;
+        }
+
+        *oHandle = NULL;
+        *oBuffer = NULL;
+
+        HANDLE hMap = OpenFileMappingW(
+            FILE_MAP_ALL_ACCESS,
+            FALSE,
+            memName
+        );
+
+        if (hMap == NULL) {
+            return AL_MAPPING_OPEN_FAILED;
+        }
+
+        void* pBuf = MapViewOfFile(
+            hMap,
+            FILE_MAP_ALL_ACCESS,
+            0, 0,
+            bufferSize
+        );
+
+        if (pBuf == NULL) {
+            return AL_MAP_VIEW_FAILED;
+        }
+
+        *oHandle = hMap;
+        *oBuffer = pBuf;
+        return ALGIS_OK;
+    }
+
+    ALGIS_STATUS __stdcall _destroySMem_(HANDLE mHandle, void* buffer) {
+        if (!mHandle || mHandle == INVALID_HANDLE_VALUE || !buffer) {
+            return AL_INVALID_PARAMETER;
+        }
+
+        BOOL unmapped = TRUE;
+        BOOL closed = TRUE;
+
+        if (buffer) {
+            unmapped = UnmapViewOfFile(buffer);
+        }
+
+        if (mHandle && mHandle != INVALID_HANDLE_VALUE) {
+            closed = CloseHandle(mHandle);
+        }
+
+        if (!unmapped) return AL_UNMAP_VIEW_FAILED;
+        if (!closed) return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR; 
+
+        return ALGIS_OK;
+    }
 
     // XSend and XRecieve
     ALGIS_STATUS __stdcall _xsend_(int transportType, LPCWSTR ipcName, const void* data, size_t dataSize) {
@@ -1413,7 +1540,27 @@ namespace algis
 
         // Shared memory
         else if (transportType == XSMEM) {
+            HANDLE hMap = NULL;
+            void* pBuffer = NULL;
 
+            ALGIS_STATUS status = _createSMem_(ipcName, static_cast<int>(dataSize), &hMap, &pBuffer);
+            if (status != ALGIS_OK) {
+                return status;
+            }
+
+            memcpy(pBuffer, data, dataSize);
+
+            wchar_t eventName[256];
+            swprintf_s(eventName, L"%s_EVENT", ipcName);
+
+            HANDLE hEvent = OpenEventW(EVENT_MODIFY_STATE, FALSE, eventName);
+            if (hEvent) {
+                SetEvent(hEvent);
+                CloseHandle(hEvent);
+            }
+
+            _destroySMem_(hMap, pBuffer);
+            return ALGIS_OK;
         }
 
         return AL_INVALID_PARAMETER;
@@ -1467,7 +1614,39 @@ namespace algis
 
         // shared mmeory
         else if (transportType == XSMEM) {
+            wchar_t eventName[256];
+            swprintf_s(eventName, L"%s_EVENT", ipcName);
 
+            HANDLE hEvent = CreateEventW(NULL, FALSE, FALSE, eventName);
+            if (!hEvent) return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
+
+            DWORD waitResult = WaitForSingleObject(hEvent, timeoutMs);
+            if (waitResult == WAIT_TIMEOUT) {
+                CloseHandle(hEvent);
+                return AL_WAIT_TIMEOUT;
+            }
+            else if (waitResult != WAIT_OBJECT_0) {
+                CloseHandle(hEvent);
+                return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
+            }
+
+            HANDLE hMap = NULL;
+            void* pBuffer = NULL;
+
+            ALGIS_STATUS status = _createSMem_(ipcName, static_cast<int>(bufferSize), &hMap, &pBuffer);
+
+            if (status != ALGIS_OK) {
+                CloseHandle(hEvent);
+                return status;
+            }
+
+            memcpy(buffer, pBuffer, bufferSize);
+            *bytesRead = static_cast<DWORD>(bufferSize);
+
+            _destroySMem_(hMap, pBuffer);
+            CloseHandle(hEvent);
+
+            return ALGIS_OK;
         }
 
         return AL_INVALID_PARAMETER;
@@ -1542,6 +1721,9 @@ namespace algis
     ALGIS_STATUS __stdcall destroy_hook(A_HOOK hook) {
         return detail::_a_destroy_hook(hook);
     }
+#endif // @end external code
+
+    // @begin IPC seciton
 
     /*
     * CreateNPipe
@@ -1598,7 +1780,7 @@ namespace algis
 
             std::thread([transportType, nameCopy, dataCopy]() {
                 detail::_xsend_(transportType, nameCopy.c_str(), dataCopy.data(), dataCopy.size());
-            }).detach();
+                }).detach();
 
             return ALGIS_OK;
         }
@@ -1631,11 +1813,11 @@ namespace algis
                 DWORD bytesRead = 0;
 
                 ALGIS_STATUS status = detail::_xrecieve_(transportType, nameCopy.c_str(), localBuffer.data(), localBuffer.size(), &bytesRead, timeoutMs);
-                
+
                 if (status == ALGIS_OK && bytesRead > 0) {
                     callback(localBuffer.data(), bytesRead);
                 }
-            }).detach();
+                }).detach();
 
             return ALGIS_OK;
         }
@@ -1643,8 +1825,8 @@ namespace algis
             return detail::_xrecieve_(transportType, ipcName, oBuffer, bufferSize, oBytesRead, timeoutMs);
         }
     }
-#endif // @end external code
 
+    // @end IPC section
 
 
 #if defined(ALGIS_INTERNAL) //< @begin internal helpers
