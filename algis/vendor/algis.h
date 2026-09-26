@@ -20,6 +20,10 @@
 #include <winternl.h>
 #include <intrin.h>
 #include <tlhelp32.h>
+#if !defined(ALGIS_LEAN)
+#include <wininet.h>
+#pragma comment(lib, "wininet.lib")
+#endif
 #elif defined(_OS_LINUX)
 #include <unistd.h>
 #include <dlfcn.h>
@@ -43,6 +47,7 @@
 #include <fstream>
 #include <iomanip>
 #include <cstdarg>
+#include <memory>
 
 //        __     _   
 //  ___ _/ /__ _(_)__
@@ -52,6 +57,10 @@
 
 // ALGIS_H - A single header file, with the capabilities of IAT hooking, VMT hooking, IPC helper, logging, networking, and even more to come in the future!
 // linux support is lacking currently, i want to finish the windows code and then linux
+
+
+// For the VMT Hooker, I didn't make it, credits to zetsr on github
+// his repo: https://github.com/zetsr/ezVMT
 
 // important constants/macros.
 // #define ALGIS_INTERNAL //< user defined; are you internal (inside the program?) or external (a seperate .exe running outside?)
@@ -209,6 +218,7 @@ public:
 // main code begins here.
 
 // main enum
+// too lazy to update this shit ngl i like i don't wanna add extra error codes
 typedef enum _ALGIS_STATUS : uint32_t {
     ALGIS_OK = 0,
     // common WIN32 errors.
@@ -249,7 +259,7 @@ typedef enum _ALGIS_STATUS : uint32_t {
 } ALGIS_STATUS;
 
 // Enum helper to debug
-inline const char* statustostring(ALGIS_STATUS status) {
+inline const char* stat_string(ALGIS_STATUS status) {
     switch (status) {
     case ALGIS_OK: return "ALGIS_OK";
     case AL_PROCESS_NOT_FOUND: return "AL_PROCESS_NOT_FOUND";
@@ -297,7 +307,38 @@ namespace algis
 {
     //> the code in detail is SUPER messy, barely readable and more! if your trying to optimize it or whatever,
     //> might as well just kill yourself cause your not fixing it
-    namespace detail {
+    namespace detail  {
+
+        /////////////////////////////////////////////////////////////////
+        ////////////////// !! START OF NETWORKING LIB !! ////////////////
+        /////////////////////////////////////////////////////////////////
+#if defined(_OS_WINDOWS) //< @begin _OS_WINDOWS
+    #if !defined(ALGIS_LEAN) //< @begin !ALGIS_LEAN
+
+        std::string _fetchHRL_(const std::string& url) {
+            std::string result;
+            HINTERNET hInternet = InternetOpen("AlgisA/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+            if (!hInternet) return result;
+
+            HINTERNET hUrl = InternetOpenUrl(hInternet, url.c_str(), NULL, 0, INTERNET_FLAG_RELOAD, 0);
+
+            if (hUrl) {
+                char buffer[4096];
+                DWORD bytesRead = 0;
+                while (InternetReadFile(hUrl, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead > 0) {
+                    buffer[bytesRead] = '\0';
+                    result.append(buffer, bytesRead);
+                }
+                InternetCloseHandle(hUrl);
+            }
+            InternetCloseHandle(hInternet);
+            return result;
+        }
+
+    #endif //< @end !ALGIS_LEAN
+#endif //< @end _OS_WINDOWS
+
+
         /////////////////////////////////////////////////////////////////
         ////////////////// !! START OF IAT HOOKER !! ////////////////////
         /////////////////////////////////////////////////////////////////
@@ -1270,6 +1311,9 @@ namespace algis
             }
         }
 
+
+        /*
+
         inline uintptr_t _get_module_base_() {
             return (uintptr_t)GetModuleHandleA(NULL);
         }
@@ -1286,6 +1330,29 @@ namespace algis
         inline bool _write_(uintptr_t address, T value) {
             return safe_write(address, &value, sizeof(T));
         }
+
+        */
+
+        // decided to be more like my external program and used this for a smart pointer as well
+        class internal_memory_t : final {
+        public:
+            inline uintptr_t get_module_base() {
+                return (uintptr_t)GetModuleHandleA(NULL);
+            }
+
+            template <typename T>
+            inline T read(uintptr_t address) {
+                T Value{};
+                safe_read(address, &Value, sizeof(T));
+                return Value;
+            }
+
+            template <typename T>
+            inline bool write(uintptr_t address, T value) {
+                return safe_write(address, &value, sizeof(T));
+            }
+
+        };
 
         inline BOOL _createVHook_(void* detour, void* classInstance, size_t index, void** outOriginal = nullptr) {
             return CreateHook(detour, classInstance, index, outOriginal) ? TRUE : FALSE;
@@ -1310,7 +1377,130 @@ namespace algis
   
     #elif defined(ALGIS_EXTERNAL) //< @elif ALGIS_EXTERNAL
 
+    class memory_t final {
+    public:
+        memory_t() = default;
+        ~memory_t() = default;
 
+        static constexpr bool is_valid(std::uint64_t address) {
+            return address >= 0x10000 && address <= 0x7FFFFFFEFFFF;
+        }
+
+        std::uint32_t find_process_id(const char* process_name);
+        std::uint64_t find_module_address(const std::string& module_name);
+
+        bool attach_to_process();
+
+        template <typename T>
+        T read(std::uint64_t address);
+
+        template <typename T>
+        void write(std::uint64_t address, T value);
+
+        std::uint32_t get_process_id();
+        std::uint64_t get_module_address();
+        HANDLE get_process_handle();
+    private:
+        std::uint32_t process_id;
+        std::uint64_t base_address;
+        HANDLE process_handle;
+    };
+
+    std::uint32_t memory_t::find_process_id(const char* process_name) {
+        DWORD pid = 0;
+
+        HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if (hSnapshot == INVALID_HANDLE_VALUE) return 0;
+
+        PROCESSENTRY32 PE32;
+        PE32.dwSize = sizeof(PROCESSENTRY32);
+
+        if (Process32First(hSnapshot, &PE32)) {
+            do 
+            {
+                if (std::strcmp(PE32.szExeFile, process_name)) {
+                    pid = PE32.th32ProcessID;
+                    break;
+                }
+            }
+            while (Process32Next(hSnapshot, &PE32));
+        }
+        CloseHandle(hSnapshot);
+        return this->process_id = pid;
+    }
+
+    bool memory_t::attach_to_process() {
+        HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+        typedef NTSTATUS(NTAPI* _RtlAdjustPrivilege)(ULONG, BOOLEAN, BOOLEAN, PBOOLEAN);
+        auto RtlAdjustPrivilege = (_RtlAdjustPrivilege)GetProcAddress(ntdll, "RtlAdjustPrivilege");
+        auto myNtQuery = (ntapi::pNtQuerySystemInformation)GetProcAddress(ntdll, "NtQuerySystemInformation");
+        auto _NtDuplicateObject = ntapi::FetchNt<ntapi::pNtDuplicateObject>("NtDuplicateObject");
+        auto _NtOpenProcess = ntapi::FetchNt<ntapi::pNtOpenProcess>("NtOpenProcess");
+        auto _NtClose = ntapi::FetchNt<ntapi::pNtClose>("NtClose");
+
+        BOOLEAN oldPriv;
+        if (RtlAdjustPrivilege) {
+            RtlAdjustPrivilege(20, TRUE, FALSE, &oldPriv);
+        }
+
+        NTSTATUS status = 0;
+        ULONG size = 0x10000;
+        ntapi::PSYSTEM_HANDLE_INFORMATION hInfo = (ntapi::PSYSTEM_HANDLE_INFORMATION)VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+        while (myNtQuery && (status = myNtQuery(ntapi::SystemHandleInformation, hInfo, size, &size)) == 0xC0000004) {
+            VirtualFree(hInfo, 0, MEM_RELEASE);
+            size *= 2;
+            hInfo = (ntapi::PSYSTEM_HANDLE_INFORMATION)VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        }
+
+        if (!NT_SUCCESS(status) || !hInfo) {
+            if (hInfo) VirtualFree(hInfo, 0, MEM_RELEASE);
+            return false;
+        }
+
+        HANDLE result = nullptr;
+        ntapi::OBJECT_ATTRIBUTES objAttr = { sizeof(ntapi::OBJECT_ATTRIBUTES) };
+
+        for (ULONG i = 0; i < hInfo->HandleCount; i++) {
+            ntapi::SYSTEM_HANDLE sh = hInfo->Handles[i];
+            if (!sh.Handle) continue;
+
+            ntapi::CLIENT_ID CID = { (HANDLE)(ULONG_PTR)sh.ProcessId, nullptr };
+            HANDLE ownerHandle = nullptr;
+
+            status = _NtOpenProcess(&ownerHandle, PROCESS_DUP_HANDLE, &objAttr, &CID);
+            if (!NT_SUCCESS(status) || !ownerHandle) continue;
+
+            HANDLE dupHandle = nullptr;
+            status = _NtDuplicateObject(ownerHandle, (HANDLE)(ULONG_PTR)sh.Handle, GetCurrentProcess(), &dupHandle, PROCESS_ALL_ACCESS, 0, 0);
+            _NtClose(ownerHandle);
+
+            if (NT_SUCCESS(status) && dupHandle && GetProcessId(dupHandle) == this->process_id) {
+                result = dupHandle;
+                break;
+            }
+            if (dupHandle) _NtClose(dupHandle);
+        }
+
+        VirtualFree(hInfo, 0, MEM_RELEASE);
+        return this->process_handle = result;
+    }
+
+    template <typename T>
+    T memory_t::read(uint64_t address) {
+        T buffer{};
+
+        ReadProcessMemory(process_handle, reinterpret_cast<void*>(address), &buffer, sizeof(T), nullptr);
+        return buffer;
+    }
+
+    template <typename T>
+    void memory_t::write(std::uint64_t address, T value) {
+        SIZE_T bytesWritten;
+        return WriteProcessMemory(this->process_handle, (LPVOID)address, &value, sizeof(T), &bytesWritten) == TRUE;
+    }
+
+    
 
     #endif //< @end ALGIS_INTERNAL and ALGIS_EXTERNAL
 #endif //< @end _OS_WINDOWS
@@ -1722,7 +1912,15 @@ namespace algis
         return detail::_a_destroy_hook(hook);
     }
 #endif // @end external code
+    // @begin networking section
+    
+#if !defined(ALGIS_LEAN)
+    std::string fetchHRL(const std::string& url) {
+        return detail::_fetchHRL_(url);
+    }
+#endif
 
+    // @end networking section
     // @begin IPC seciton
 
     /*
@@ -1828,6 +2026,21 @@ namespace algis
 
     // @end IPC section
 
+    // @begin memory section
+
+    /*
+    * memory class
+    * 
+    * This class is just for external memory reading, pretty useful but honesntly this is more of an
+    * internal lib
+    */
+    inline std::unique_ptr<detail::memory_t>& memory() {
+        static std::unique_ptr<detail::memory_t> instance = std::make_unique<detail::memory_t>();
+        return instance;
+    }
+
+    // @end memory section
+
 
 #if defined(ALGIS_INTERNAL) //< @begin internal helpers
     // _CRT_INIT (needed for mmappers!)
@@ -1855,8 +2068,15 @@ namespace algis
         return detail::_getVOrignal(detour);
     }
 
+    inline std::unique_ptr<detail::internal_memory_t>& memory() {
+        static std::unique_ptr<detail::internal_memory_t> instance = std::make_unique<internal_memory_t>();
+        return instance;
+    }
+
+
 #endif //< @end internal helpers
 #endif //< @end _OS_WINDOWS
 
 } // namespace algis
+
 #endif // ALGIS_H

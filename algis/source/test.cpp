@@ -4,9 +4,24 @@
 
 // I would recomend to do "using namespace algis"
 
+// now i might have just realized that my IAT hooker already has external read/write functions but i spent so long
+// researching how smart pointers work so im going to use this unneeded boilerplate code
+auto main() -> int {
+
+	algis::memory()->find_process_id("RobloxPlayerBeta.exe");
+	if (algis::memory()->attach_to_process() != true) {
+		printf("attach to process failed!\n");
+		return 1;
+	}
+
+	printf("attach to process worked!\n");
+	return 0;
+
+}
+
+
 /*
 int main() {
-
 	void* QPC = GetProcAddress(GetModuleHandleA("Kernel32.dll"), "QueryPerformanceCounter");
 	A_HOOK qpcHook = nullptr;
 
@@ -74,7 +89,7 @@ int main() {
 }  
 */
 
-
+/*
 void reciver_thread(LPCWSTR ipcName) {
 	std::wcout << L"starting and waiting for data on: " << ipcName << std::endl;
 
@@ -122,6 +137,7 @@ int main() {
 	std::cout << "test completed\n";
 	return 0;
 }
+*/
 
 /*
 int main() {
