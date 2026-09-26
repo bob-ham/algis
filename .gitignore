@@ -361,3 +361,4 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/algisdlltest/minhook-1.3.4/minhook-1.3.4
