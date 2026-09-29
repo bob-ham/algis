@@ -1,11 +1,11 @@
 #include <iostream>
 #include <thread>
-#include <d3d11.h>
-#include <dxgi.h>
-#include <tchar.h>
 #include <cmath>
 #include <windows.h>
+#include <tchar.h>
+#include <dxgi.h>
 #include <dwmapi.h>
+#include <d3d11.h>
 
 #include <imgui.h>
 #include <imgui_impl_dx11.h>
@@ -19,29 +19,18 @@
 #include "../vendor/globals.hpp"
 #include "../vendor/cache/cache.hpp"
 
-void s_console() {
-    AllocConsole();
+// features
+#include "../vendor/features/ESP/boxesp.hpp"
 
-    FILE* fDummy;
-    freopen_s(&fDummy, "CONOUT$", "w", stdout);
-    freopen_s(&fDummy, "CONOUT$", "w", stderr);
-    freopen_s(&fDummy, "CONIN$", "r", stdin);
-
-    std::cout.clear();
-    std::clog.clear();
-    std::cerr.clear();
-    std::cin.clear();
-}
 
 void CacheWorker() {
-    printf("starting cache worker\n");
+    // printf("starting cache worker\n");
 
     while (Cache::GCacheRunning) {
         bool success = UpdateCache();
 
         if (success) {
-            std::cout << "Active Players: " << Cache::GLastPlayerCount << std::endl;
-
+            // let it do its thing
         }
         else {
             printf("cache update failed or local player null\n");
@@ -49,30 +38,6 @@ void CacheWorker() {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     printf("cache worker pasued");
-}
-
-void DoTheWork()
-{
-    printf("hello guys\n");
-    Memory->FindProcessID("RobloxPlayerBeta.exe");
-    bool success = Memory->AttachToProcess();
-    if (success) {
-        uintptr_t DataModel = SDK::GetDataModel();
-        printf("datamodel: 0x%llx\n", DataModel);
-        uintptr_t Workspace = Memory->Read<uintptr_t>(DataModel + Offsets::DataModel::Workspace);
-        printf("workspace: 0x%llx\n", Workspace);
-
-        uintptr_t Players = SDK::FindFirstChild(DataModel, "Players");
-        uintptr_t LocalPlayer = Memory->Read<uintptr_t>(Players + Offsets::Player::LocalPlayer);
-        std::string LP_Name = SDK::GetName(LocalPlayer);
-        printf("LocalPlayer Name: %s\n", LP_Name.c_str());
-
-        uintptr_t Character = SDK::FindFirstChild(Workspace, LP_Name);
-        uintptr_t Humanoid = SDK::FindFirstChild(Character, "Humanoid");
-
-        Memory->Write<float>(Humanoid + Offsets::Humanoid::Walkspeed, 1000.0f);
-        Memory->Write<float>(Humanoid + Offsets::Humanoid::WalkspeedCheck, 1000.0f);
-    }
 }
 
 static ID3D11Device* g_pd3dDevice = nullptr;
@@ -160,6 +125,16 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int)
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
+    // some boilerplate code
+    SDK::StartProccess();
+    DataModel::GRealDataModel = SDK::GetDataModel();
+    Service::GWorkspace = SDK::GetWorkspace();
+    Service::GVisualEngine = SDK::GetVisualEngine();
+    Service::GPlayers = SDK::FindFirstChild(DataModel::GRealDataModel, "Players");
+    
+    std::thread CacheThread(CacheWorker);
+    CacheThread.detach();
+
     bool done = false;
     while (!done)
     {
@@ -194,25 +169,28 @@ int APIENTRY _tWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int)
                     ::ReleaseCapture();
                     ::SendMessage(hwnd, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
                 }
-        }
-
-        if (ImGui::BeginTabBar("##MainComplexityTabItem")) {
-            if (ImGui::BeginTabItem("Main")) {
-
-                ImGui::BeginChild("Test", ImVec2(280, 320), true);
-                {
-                    ImGui::Text("Aimbot");
-                    ImGui::Separator();
-
-
-                    ImGui::Checkbox("enabled", &gui::g_Aimbot);
-
-                }
-                ImGui::EndChild();
             }
-            ImGui::EndTabItem();
-        }
-        ImGui::EndTabBar();
+
+            if (ImGui::BeginTabBar("##MainComplexityTabItem")) {
+                if (ImGui::BeginTabItem("Main")) {
+
+                    ImGui::BeginChild("Test", ImVec2(280, 320), true);
+                    {
+                        ImGui::Text("esp");
+                        ImGui::Separator();
+
+
+                        ImGui::Checkbox("enabled", &gui::g_Aimbot);
+                        if (gui::g_Aimbot) {
+                            ActivateBoxEsp();
+                        }
+
+                    }
+                    ImGui::EndChild();
+                }
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
         ImGui::End();
 
