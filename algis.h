@@ -296,7 +296,6 @@ typedef struct _obf_ptr {
 	std::uint32_t hi;
 	std::uint32_t noise1;
 } obf_ptr_t;
-
 __attr_pop__
 
 class encrypt final{
@@ -1615,7 +1614,7 @@ namespace algis {
 		inline bool Write(std::uintptr_t address, Fn value) {
 			return safe_write(address, &value, sizeof(Fn));
 		}
-	}
+	};
 #endif //< @end ALGIS_INTERNAL
 	class memory_t final {
 	public:
@@ -1636,7 +1635,7 @@ namespace algis {
 		template <typename T>
 		void Write(std::uint64_t address, T value);
 
-		std::uint32_t GetProcessId();
+		std::uint32_t FetchProcessId();
 		std::uint64_t GetModuleAddress();
 		HANDLE GetProcessHandle();
 	private:
@@ -1657,7 +1656,7 @@ namespace algis {
 		if (Process32First(hSnapshot, &PE32)) {
 			do
 			{
-				if (std::strcmp(PE32.szExeFile, process_name)) {
+				if (std::strcmp(PE32.szExeFile, process_name) == 0) {
 					pid = PE32.th32ProcessID;
 					break;
 				}
@@ -1738,7 +1737,7 @@ namespace algis {
 			syscall::Close(owner);
 
 			if (NT_SUCCESS(status) && dup) {
-				if (GetProcessId() == this->ProcessID) {
+				if (GetProcessId(dup) == this->ProcessID) {
 					result = dup;
 					break;
 				}
@@ -1762,15 +1761,14 @@ namespace algis {
 	template <typename T>
 	void memory_t::Write(std::uint64_t address, T value) {
 		SIZE_T bytesWritten;
-		return syscall::WriteVirtualMemory(this->ProcessHandle, (LPVOID)address, &value, sizeof(T), &bytesWritten) == TRUE;
+		return syscall::WriteVirtualMemory(this->ProcessHandle, (LPVOID)address, &value, sizeof(T), &bytesWritten);
 	}
 
 #endif //< @end ALGIS_EXTERNAL
 
 		/////////////////////////////////////////////////////////////////
 		////////////////// !! START OF IPC COMMUNCATION !! //////////////
-		/////////////////////////////////////////////////////////////////
-#if defined(ALGIS_EXTERNAL) //< @begin ALGIS_IPC
+		///////////////////////////////////////////////////////////////// //< @begin ALGIS_IPC
     namespace {
         bool IsValidIPCName(LPCWSTR name) {
             return name != nullptr && name[0] != L'\0';
@@ -2097,9 +2095,9 @@ namespace algis {
 
 	// internal dispatcher ctx
 	struct _dispatch_ctx_ {
-		LPCWSTR     pipeName;
-		bool        running;
-		std::thread thread;
+		std::wstring     pipeName;
+		bool             running;
+		std::thread      thread;
 	};
 
 	static _dispatch_ctx_ _ctx_ = {};
@@ -2206,7 +2204,6 @@ namespace algis {
 	}
 
 #endif //< @end ALGIS_INTERNAL
-#endif //< @end ALGIS_IPC
 	} //< @end detail (internal)
 
 	/*
