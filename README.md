@@ -1,4 +1,4 @@
-##ALGIS.H##
+## ALGIS.H ##
 
 *A huge header file, filled with a bunch of cheating tools. A skids dream.*
 
