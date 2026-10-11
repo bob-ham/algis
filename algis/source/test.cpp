@@ -1,9 +1,11 @@
 #define ALGIS_EXTERNAL
+#define ALGIS_LEAN
 #include "../vendor/algis.h"
 
 
 // I would recomend to do "using namespace algis"
 
+/*
 // now i might have just realized that my IAT hooker already has external read/write functions but i spent so long
 // researching how smart pointers work so im going to use this unneeded boilerplate code
 auto main() -> int {
@@ -18,9 +20,10 @@ auto main() -> int {
 	return 0;
 
 }
+*/
 
 
-/*
+
 int main() {
 	void* QPC = GetProcAddress(GetModuleHandleA("Kernel32.dll"), "QueryPerformanceCounter");
 	A_HOOK qpcHook = nullptr;
@@ -33,7 +36,7 @@ int main() {
 	}
 	printf("test 1 passed, test 2\n");
 	uintptr_t entryPoint = 0;
-	const wchar_t* dllPath = L"C:\\Users\\cheese\\source\\repos\\algis\\x64\\Release\\algisdlltest.dll";
+	const wchar_t* dllPath = L"C:\\Users\\cheese\\source\\repos\\algis\\x64\\Release\\exthk.dll";
 
 	if (algis::map(dllPath, &entryPoint) != ALGIS_OK){
 		printf("IMap failed\n");
@@ -47,7 +50,7 @@ int main() {
 		printf("ICreateHook failed\n");
 		algis::hk_uninit();
 	}
-	printf("hook placed ad address: 0x%p\n", (void*)entryPoint);
+	printf("hook placed at address: 0x%p\n", (void*)entryPoint);
 	printf("Press any key to clean up.\n");
 	Sleep(1000);
 	algis::destroy_hook(qpcHook);
@@ -57,7 +60,7 @@ int main() {
 
 	return 0;
 } 
-*/
+
 
 /*
 

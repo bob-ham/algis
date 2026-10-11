@@ -48,7 +48,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>ClangCL</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -129,30 +129,23 @@
       </PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <EntryPointSymbol>ThreadpoolCallback</EntryPointSymbol>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="dllmain.cpp" />
-    <ClCompile Include="minhook-1.3.4\minhook-1.3.4\src\buffer.c" />
-    <ClCompile Include="minhook-1.3.4\minhook-1.3.4\src\hde\hde32.c" />
-    <ClCompile Include="minhook-1.3.4\minhook-1.3.4\src\hde\hde64.c" />
-    <ClCompile Include="minhook-1.3.4\minhook-1.3.4\src\hook.c" />
-    <ClCompile Include="minhook-1.3.4\minhook-1.3.4\src\trampoline.c" />
+    <ClCompile Include="src\dllmain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\include\MinHook.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\buffer.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\hde\hde32.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\hde\hde64.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\hde\pstdint.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\hde\table32.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\hde\table64.h" />
-    <ClInclude Include="minhook-1.3.4\minhook-1.3.4\src\trampoline.h" />
+    <ClInclude Include="include\offsets.hpp" />
+    <ClInclude Include="include\SDK\sdk.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
