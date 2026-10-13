@@ -1,7 +1,8 @@
 ## ALGIS 
 *a cheat library, filled with a collection of tools i made over the years. the dream of a skid*
-**CREATED BY FREASKTER, AKA <algis.h> on TikTok and Instagram. Discord is `ownerofsomethingbruh`**
-*check [https://github.com/bob-ham/algis/blob/master/LICENSE](LICESNSE) for license details*
+**CREATED BY FREASKTER, AKA \<algis.h> on TikTok and Instagram.** 
+**Discord is `ownerofsomethingbruh`**
+*check [LICESNSE](https://github.com/bob-ham/algis/blob/master/LICENSE) for license details*
 
 **STRUCTURE**
 - since this is no longer algis v1.0 where it was a single header file (now deprecated, i made it as a challenge and i maded making it myself)
