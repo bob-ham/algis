@@ -64,3 +64,4 @@
 ## WHAT I MIGHT ADD ##
 - network helper, fetching JSON but a JSON parser is terrible; might just make it parse .hpp files instead
 - more internal helpers, vmt hooker perhaps?
+- lua embedding, but that seems sort of useless
