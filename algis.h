@@ -1,5 +1,20 @@
 #ifndef ALGIS_H
 #define ALGIS_H
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
+// !! DEPREACTED !!
 /*
 *MIT License
 *
