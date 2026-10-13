@@ -7,7 +7,7 @@
 **STRUCTURE**
 - since this is no longer algis v1.0 where it was a single header file (now deprecated, i made it as a challenge and i maded making it myself)
 - everything is split in this file structure
-- ![file structure](./assets/file structure.png)
+- ![file structure](./assets/structure.png)
 
 **MACROS**
 - define these <i>BEFORE<i> including `algis.h`
