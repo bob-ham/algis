@@ -51,7 +51,7 @@ void smem_sender() {
 
   ALGIS_STATUS status = algis::xsend(
     XSMEM,
-    L"Local/algis_mem",
+    L"Local\algis_mem",
     &d,
     sizeof(data));
 
@@ -66,7 +66,7 @@ void smem_recieve() {
 
   ALGIS_STATUS status = algis::xrecieve(
     XSMEM,
-    L"Local/algis_mem",
+    L"Local\algis_mem",
     &d,
     sizeof(data),
     &bytes_read,
