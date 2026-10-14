@@ -263,6 +263,7 @@ inline HookLib& GetHookLib() {
 }
 ```
 - i dont think any explanation is needed, pretty self explantory
+
 **HOOK EXAMPLE**
 - now the final part, `algis.cpp`
 - ill go through the 5 functions that is this
