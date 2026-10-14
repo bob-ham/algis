@@ -326,7 +326,7 @@ ALGIS_API xrecieve(int transport_type, LPCWSTR ipc_name, void *o_buffer, size_t 
 ```
 - `xsend` takes 4 args. transport_type `XPIPE` or `XSMEM`, name of IPC, the data, and size of data. `xsend` is for the client
 - `xrecieve` takes 6 args. transport_type, name of ipc, output buffer, buffer_size, output_bytes_read and timeout milliseconds. `xrecieve` is for the server
-- an example file will be listed [here]()
+- an example file will be listed [here](https://github.com/bob-ham/algis/blob/master/repos/algis/examples/example_ipc.cpp)
 
 ## WHAT I AM PLANNING TO ADD
 - i want to add a lua/ branch to this
