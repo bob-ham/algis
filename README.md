@@ -100,7 +100,7 @@ int main() {
   WLOG("message: %s", msg.c_str());
 }
 ```
-
+**MEMORY**
 - `memory_t` and `internal_memory_t`
 - `memory_t` expands to this def, `class memory_t final : public Process`
 - the `Process` class pulls from my syscall resolver, and `memory_t` is just a name steal from
@@ -112,7 +112,7 @@ int main() {
 - handle hijacker for it, so its just read/write commands + module address getter
 - both `memory_t` and `internal_memory_t` and turned into smart pointers
 
-
+**DLL INJECTOR**
 - DLL injector now, seperated into 4 parts
 - `hook.hpp`, `mmap.cpp/hpp`, `process.cpp/hpp` are the main parts, there is one more (`syscall.hpp`) but i wont talk about it here
 - everything starts with `process.cpp/hpp`
@@ -263,7 +263,7 @@ inline HookLib& GetHookLib() {
 }
 ```
 - i dont think any explanation is needed, pretty self explantory
-
+*EXAMPLE*
 - now the final part, `algis.cpp`
 - ill go through the 5 functions that is this
 - `ALGIS_API algis::init(const char* process_name)`; takes your target (lets use RobloxPlayerBeta.exe) and gets a handle to it/inits the `Process` class
