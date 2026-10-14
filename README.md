@@ -197,7 +197,7 @@ public:
   map_result map(const std::wstring& dll_path);
 };
 ```
-- the important thing to take away is that it takes the `Process` class as a function and makes a
+- the important thing to take away is that it takes the `Process` class as a arg and makes a
 - `map_result` struct, important for the IAT hooker
 - the three main functions are `fix_relocations`, `resolve_imports` and `register_seh`
 - `fix_relocations` fixes DLL relocations, pretty self explantory
