@@ -5,7 +5,7 @@
 
 #include <map>
 
-typedef struct _Hook {
+struct Hook {
   void** target_slot;
   void* orig;
   // hook
@@ -43,14 +43,14 @@ typedef struct _Hook {
     return true;
   }
 
-} Hook;
+};
 
 // HookLib
-typedef struct _HookLib {
+struct HookLib {
   Process* process = nullptr;
   std::map<void*, Hook*> registry;
   mapper::map_result last_map_result = {0, 0, false};
-} HookLib;
+};
 
 inline HookLib& GetHookLib() {
   static HookLib lib;

@@ -1,5 +1,6 @@
 #include "mmap.hpp"
 #include "../../global/syscalls.hpp"
+#include <vector>
 
 // manual mapper defs
 mapper::mapper(Process& process) : process(process) {}

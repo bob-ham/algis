@@ -9,10 +9,10 @@
 #endif
 
 #if !defined(ALGIS_LEAN)
-#include "../global/network.hpp"
+// #include "../global/network.hpp"
 #endif
 
-#if defined (ALGIS_INTERNAL)
+#if defined(ALGIS_INTERNAL)
 #include "../internal/ipc_log.hpp"
 #include "../internal/dispatch.hpp"
 #endif
@@ -60,7 +60,7 @@ ALGIS_API algis::map(const wchar_t* dll_path, uintptr_t* o_entrypoint) {
   return ALGIS_OK;
 }
 
-ALGIS_API algis::create_hook(void* jmp_instruction, void* new_target, HOOK* o_hook) {
+ALGIS_API algis::create_hook(void* jmp_instruction, void* new_target, void** o_hook) {
   auto& lib = GetHookLib();
   if (!lib.process)
     return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
@@ -87,7 +87,7 @@ ALGIS_API algis::create_hook(void* jmp_instruction, void* new_target, HOOK* o_ho
   return ALGIS_OK;
 }
 
-ALGIS_API algis::destroy_hook(HOOK hook) {
+ALGIS_API algis::destroy_hook(void* hook) {
   auto& lib = GetHookLib();
   if (!lib.process)
     return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
@@ -148,43 +148,16 @@ ALGIS_API algis::destroy_smem(HANDLE o_handle, void* buffer) {
   return _destroy_smem_(o_handle, buffer);
 }
 
-ALGIS_API xsend(int transport_type, LPCWSTR ipc_name, const void* data, size_t data_size, bool seperate_thread = false) {
+ALGIS_API algis::xsend(int transport_type, LPCWSTR ipc_name, const void* data, size_t data_size) {
   if (!ipc_name || !data || data_size == 0)
     return AL_INVALID_PARAMETER;
-
-  if (seperate_thread) {
-    std::vector<BYTE> data_copy(static_cast<const BYTE*>(data), static_cast<const BYTE*>(data) + data_size);
-    std::wstring name_copy(ipc_name);
-
-    std::thread([transport_type, name_copy, data_copy]() {
-      _xsend_(transport_type, name_copy.c_str(), data_copy.data(), data_copy.size());
-    }).detach();
-    return ALGIS_OK;
-  } else {
-    return _xsend_(transport_type, ipc_name, data, data_size);
-  }
+  return _xsend_(transport_type, ipc_name, data, data_size);
 }
 
-ALGIS_API xrecieve(int transport_type, LPCWSTR ipc_name, void* o_buffer, size_t buffer_size, DWORD* o_bytes_read, DWORD ms, fnAlgisCallback callback = nullptr, bool seperate_thread = false) {
-  if (seperate_thread) {
-    if (!callback)
-      return AL_INVALID_PARAMETER;
-
-    std::wstring name_copy(ipc_name);
-
-    std::thread([transport_type, name_copy, ms, callback]() {
-      std::vector<BYTE> local_buffer(4096);
-      DWORD bytes_read = 0;
-
-      ALGIS_STATUS status = _xrecieve_(transport_type, name_copy.c_str(), local_buffer.data(), local_buffer.size(), &bytes_read, ms);
-      if (status == ALGIS_OK && bytes_read > 0) {
-        callback(local_buffer.data(), bytes_read);
-      }
-    }).detach();
-    return ALGIS_OK;
-  } else {
-    return _xrecieve_(transport_type, ipc_name, o_buffer, buffer_size, o_bytes_read, ms);
-  }
+ALGIS_API algis::xrecieve(int transport_type, LPCWSTR ipc_name, void* o_buffer, size_t buffer_size, DWORD* o_bytes_read, DWORD ms) {
+  if (!ipc_name || !o_buffer || !o_bytes_read || buffer_size == 0)
+    return AL_INVALID_PARAMETER;
+  return _xrecieve_(transport_type, ipc_name, o_buffer, buffer_size, o_bytes_read, ms);
 }
 
 #if defined(ALGIS_INTERNAL)
@@ -195,11 +168,5 @@ ALGIS_API ipc_log(LPCWSTR ipc_name, std::uint8_t level, const char* msg) {
 #endif
 
 #if !defined(ALGIS_LEAN)
-ALGIS_API algis::fetch(const std::string &url, const std::string &save_path) {
-  return _fetch_(url, save_path);
-}
-
-std::uintptr_t algis::get(const std::string &name) {
-  return _get_(name);
-}
+// messed up here bad so ill fix it later
 #endif

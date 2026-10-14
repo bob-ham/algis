@@ -2,6 +2,9 @@
 #pragma once
 #include "../algis.h"
 
+// change; added IPC_MAGIC as a constexpr as its an internal macro that doesnt need to be exposed to the public API
+static constexpr char IPC_MAGIC[] = "algis_ipc";
+
 
 // global code so no need for header guards 
 
@@ -180,65 +183,62 @@ inline ALGIS_API _destroy_smem_(HANDLE o_handle, void* buffer) {
 }
 
 // XSend and XRecieve
-inline ALGIS_API _xsend_(int transport_type, LPCWSTR ipc_name, const void *data, size_t data_size) {
-    if (!ipc_name || !data || data_size == 0) {
+inline ALGIS_API _xsend_(int transport_type, LPCWSTR ipc_name, const void* data, size_t data_size) {
+    if (!ipc_name || !data || data_size == 0)
         return AL_INVALID_PARAMETER;
-    }
 
-    // named pipes
     if (transport_type == XPIPE) {
         HANDLE hPipe = INVALID_HANDLE_VALUE;
 
         ALGIS_STATUS status = _open_pipe_(ipc_name, 5000, &hPipe);
-        if (status != ALGIS_OK) {
+        if (status != ALGIS_OK)
             return status;
-        }
 
         IpcHeader header = {};
         std::memcpy(header.magic, IPC_MAGIC, sizeof(header.magic));
-        header.payload_size = static_cast<std::uint32_t>(data_size);
+        header.transport     = XPIPE;
+        header.payload_size  = static_cast<std::uint32_t>(data_size);
 
-        std::vector<BYTE> packet_buffer(sizeof(IpcHeader) + data_size);
-        std::memcpy(packet_buffer.data(), &header, sizeof(IpcHeader));
-        std::memcpy(packet_buffer.data() + sizeof(IpcHeader), data, data_size);
+        std::vector<BYTE> packet(sizeof(IpcHeader) + data_size);
+        std::memcpy(packet.data(), &header, sizeof(IpcHeader));
+        std::memcpy(packet.data() + sizeof(IpcHeader), data, data_size);
 
-        DWORD bytes_written = 0;
-        BOOL success = WriteFile(
-            hPipe,
-            packet_buffer.data(),
-            static_cast<DWORD>(packet_buffer.size()),
-            &bytes_written,
-            NULL
-        );
-
+        DWORD written = 0;
+        BOOL ok = WriteFile(hPipe, packet.data(), static_cast<DWORD>(packet.size()), &written, NULL);
         _destroy_pipe_(&hPipe);
 
-        if (!success || bytes_written != packet_buffer.size()) {
+        if (!ok || written != static_cast<DWORD>(packet.size()))
             return AL_WRITE_FAILED;
-        }
+
         return ALGIS_OK;
     }
 
-    // shared mem (NO IPC_MAGIC YET)
     else if (transport_type == XSMEM) {
-        HANDLE hMap = NULL;
-        void* pBuffer = NULL;
+        wchar_t event_data[256], event_ack[256];
+        swprintf_s(event_data, L"%s_DATA", ipc_name);
+        swprintf_s(event_ack,  L"%s_ACK",  ipc_name);
+
+        HANDLE hMap    = NULL;
+        void*  pBuffer = NULL;
 
         ALGIS_STATUS status = _create_smem_(ipc_name, static_cast<int>(data_size), &hMap, &pBuffer);
-        if (status != ALGIS_OK) {
+        if (status != ALGIS_OK)
             return status;
-        }
 
         std::memcpy(pBuffer, data, data_size);
-        
-        wchar_t event_name[256];
-        swprintf_s(event_name, L"%s_EVENT", ipc_name);
 
-        HANDLE hEvent = OpenEventW(EVENT_MODIFY_STATE, FALSE, event_name);
-        
-        if (hEvent) {
-            SetEvent(hEvent);
-            CloseHandle(hEvent);
+        HANDLE hData = OpenEventW(EVENT_MODIFY_STATE, FALSE, event_data);
+        if (!hData) {
+            _destroy_smem_(hMap, pBuffer);
+            return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
+        }
+        SetEvent(hData);
+        CloseHandle(hData);
+
+        HANDLE hAck = OpenEventW(SYNCHRONIZE, FALSE, event_ack);
+        if (hAck) {
+            WaitForSingleObject(hAck, 5000);
+            CloseHandle(hAck);
         }
 
         _destroy_smem_(hMap, pBuffer);
@@ -248,77 +248,76 @@ inline ALGIS_API _xsend_(int transport_type, LPCWSTR ipc_name, const void *data,
     return AL_INVALID_PARAMETER;
 }
 
-inline ALGIS_API _xrecieve_(int transport_type, LPCWSTR ipc_name, void *buffer, size_t buffer_size, DWORD *bytes_read, DWORD ms) {
-    if (!ipc_name || !buffer || buffer_size == 0 || !bytes_read) {
+inline ALGIS_API _xrecieve_(int transport_type, LPCWSTR ipc_name, void* buffer, size_t buffer_size, DWORD* bytes_read, DWORD ms) {
+    if (!ipc_name || !buffer || buffer_size == 0 || !bytes_read)
         return AL_INVALID_PARAMETER;
-    }
 
     *bytes_read = 0;
 
-    // named pipes
     if (transport_type == XPIPE) {
         HANDLE hPipe = INVALID_HANDLE_VALUE;
 
-        size_t total_expected_size = sizeof(IpcHeader) + buffer_size;
-        ALGIS_STATUS status = _create_pipe_(ipc_name, static_cast<DWORD>(buffer_size), &hPipe);
-        if (status != ALGIS_OK) return status;
+        DWORD pipe_buf = static_cast<DWORD>(sizeof(IpcHeader) + buffer_size);
+        ALGIS_STATUS status = _create_pipe_(ipc_name, pipe_buf, &hPipe);
+        if (status != ALGIS_OK)
+            return status;
 
         BOOL connected = ConnectNamedPipe(hPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-
         if (!connected) {
             _destroy_pipe_(&hPipe);
             return AL_CONNECT_FAILED;
         }
 
-        std::vector<BYTE> read_buffer(total_expected_size);
+        std::vector<BYTE> read_buffer(pipe_buf);
         DWORD dwRead = 0;
-        BOOL success = ReadFile(hPipe, read_buffer.data(), static_cast<DWORD>(read_buffer.size()), &dwRead, NULL);
-
+        BOOL ok = ReadFile(hPipe, read_buffer.data(), static_cast<DWORD>(read_buffer.size()), &dwRead, NULL);
         _destroy_pipe_(&hPipe);
 
-        if (!success || dwRead < sizeof(IpcHeader)) {
+        if (!ok || dwRead < sizeof(IpcHeader))
             return AL_READ_FAILED;
-        }
 
         IpcHeader* header = reinterpret_cast<IpcHeader*>(read_buffer.data());
-        if (std::memcmp(header->magic, IPC_MAGIC, sizeof(header->magic)) != 0) {
+        if (std::memcmp(header->magic, IPC_MAGIC, sizeof(header->magic)) != 0)
             return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
-        }
 
-        DWORD acutal_payload_size = dwRead - sizeof(IpcHeader);
-        if (acutal_payload_size > buffer_size) {
-            acutal_payload_size = static_cast<DWORD>(buffer_size);
-        }
+        DWORD payload_size = dwRead - static_cast<DWORD>(sizeof(IpcHeader));
+        if (payload_size > static_cast<DWORD>(buffer_size))
+            payload_size = static_cast<DWORD>(buffer_size);
 
-        std::memcpy(buffer, read_buffer.data() + sizeof(IpcHeader), acutal_payload_size);
-        *bytes_read = acutal_payload_size;
+        std::memcpy(buffer, read_buffer.data() + sizeof(IpcHeader), payload_size);
+        *bytes_read = payload_size;
         return ALGIS_OK;
     }
 
     else if (transport_type == XSMEM) {
-        wchar_t event_name[256];
-        swprintf_s(event_name, L"%s_EVENT", ipc_name);
+        wchar_t event_data[256], event_ack[256];
+        swprintf_s(event_data, L"%s_DATA", ipc_name);
+        swprintf_s(event_ack,  L"%s_ACK",  ipc_name);
 
-        HANDLE hEvent = CreateEventW(NULL, FALSE, FALSE, event_name);
-        if (!hEvent) return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
+        HANDLE hData = CreateEventW(NULL, FALSE, FALSE, event_data);
+        HANDLE hAck  = CreateEventW(NULL, FALSE, FALSE, event_ack);
 
-        DWORD wait_result = WaitForSingleObject(hEvent, ms);
-        if (wait_result == WAIT_TIMEOUT) {
-            CloseHandle(hEvent);
-            return AL_WAIT_TIMEOUT;
-        }
-        else if (wait_result != WAIT_OBJECT_0) {
-            CloseHandle(hEvent);
+        if (!hData || !hAck) {
+            if (hData) CloseHandle(hData);
+            if (hAck)  CloseHandle(hAck);
             return AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
         }
 
-        HANDLE hMap = NULL;
-        void* pBuffer = NULL;
+        DWORD wait = WaitForSingleObject(hData, ms);
+        if (wait != WAIT_OBJECT_0) {
+            CloseHandle(hData);
+            CloseHandle(hAck);
+            return (wait == WAIT_TIMEOUT) ? AL_WAIT_TIMEOUT : AL_INTERNAL_UNKNOWN_SYSTEM_ERROR;
+        }
 
-        ALGIS_STATUS status = _create_smem_(ipc_name, static_cast<int>(buffer_size), &hMap, &pBuffer);
+        HANDLE hMap    = NULL;
+        void*  pBuffer = NULL;
 
+        ALGIS_STATUS status = _open_smem_(ipc_name, static_cast<int>(buffer_size), &hMap, &pBuffer);
         if (status != ALGIS_OK) {
-            CloseHandle(hEvent);
+            SetEvent(hAck); 
+            CloseHandle(hData);
+            CloseHandle(hAck);
             return status;
         }
 
@@ -326,8 +325,10 @@ inline ALGIS_API _xrecieve_(int transport_type, LPCWSTR ipc_name, void *buffer, 
         *bytes_read = static_cast<DWORD>(buffer_size);
 
         _destroy_smem_(hMap, pBuffer);
-        CloseHandle(hEvent);
 
+        SetEvent(hAck);
+        CloseHandle(hData);
+        CloseHandle(hAck);
         return ALGIS_OK;
     }
 
