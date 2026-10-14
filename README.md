@@ -35,7 +35,7 @@ target_include_directories(test PRIVATE algis/algis.h)
 ```
 
 ## USEFUL KNOWLEDGE
-- every function in the algis:: namespace uses the `ALGIS_API` function
+- every function in the algis:: namespace uses the `ALGIS_API` macro
 - `ALGIS_API` expands to `ALGIS_STATUS __stdcall`
 - `ALGIS_STATUS` is a big enum that expands to this
 ```cpp
