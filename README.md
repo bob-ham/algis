@@ -273,7 +273,7 @@ inline HookLib& GetHookLib() {
 - `AGLIS_API algis::map(const wchar_t* dll_path, std::uintptr_t* o_entry)`; takes your dll math, manually maps it and returns the entry point
 - `AGLIS_API algis::create_hook(void* jmp_instruction, void* new_target void** o_hook)`; takes your desired target `jmp_instruction`, puts in new target (entry point from DLL) and outputs the address to the hook `o_hook`
 - `ALGIS_API algis::destroy_hook(void* hook)` gets said outputted hook and removes it, its called like `algis::destroy_hook` then `algis::uninit`
-- an example file will be [here](examples/example_hook.cpp)
+- an example file will be [here](repo/algis/examples/example_hook.cpp)
 
 **LICENSE**
 *check [LICENSE](https://github.com/bob-ham/algis/blob/master/LICENSE) for license details*
