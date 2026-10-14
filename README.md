@@ -263,7 +263,7 @@ inline HookLib& GetHookLib() {
 }
 ```
 - i dont think any explanation is needed, pretty self explantory
-*EXAMPLE*
+**HOOK EXAMPLE**
 - now the final part, `algis.cpp`
 - ill go through the 5 functions that is this
 - `ALGIS_API algis::init(const char* process_name)`; takes your target (lets use RobloxPlayerBeta.exe) and gets a handle to it/inits the `Process` class
