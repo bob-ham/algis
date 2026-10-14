@@ -11,7 +11,7 @@
 i have exited the scene but i want to leave behind the stuff i used. i want to contribute to the scene without directly writing cheats/execs.
 thats the entire purpose of algis, a lazy way for me to contribute without having to do anything*
 
-**GETTING STARTED**
+## GETTING STARTED
 - i recommend to use a CMake, as it makes compilation easier
 - was also made in c++ if that wasnt obvious
 - basic cmake:
@@ -34,7 +34,7 @@ target_include_directories(test PRIVATE algis/algis.h)
 #include "../includes/algis.h"
 ```
 
-**USEFUL KNOWLEDGE**
+## USEFUL KNOWLEDGE
 - every function in the algis:: namespace uses the `ALGIS_API` function
 - `ALGIS_API` expands to `ALGIS_STATUS __stdcall`
 - `ALGIS_STATUS` is a big enum that expands to this
@@ -84,8 +84,9 @@ enum ALGIS_STATUS : std::uint32_t {
 ```
 - this is the main enum, every function in algis:: uses this
 - there is also a `al_to_string` function that takes an `ALGIS_STATUS` status and converts it to a string
+- there is two main parts to this, the memory/injection and IPC. i will add more, but those are the main parts. keep that in mind
 
-**USAGE**
+## USAGE
 - ill go from least important to most important
 - `FLogger` class, just a simple logger class i made
 - you use the macros `LOG_INIT` and put in a file_path parameter
@@ -275,5 +276,62 @@ inline HookLib& GetHookLib() {
 - `ALGIS_API algis::destroy_hook(void* hook)` gets said outputted hook and removes it, its called like `algis::destroy_hook` then `algis::uninit`
 - an example file will be [here](https://github.com/bob-ham/algis/blob/master/repos/algis/examples/example_hook.cpp)
 
-**LICENSE**
+**IPC**
+- the IPC part of algis, was very fun to make
+- there is 5 main structs we need to talk about, and 2 public macros
+- the macros, `XPIPE` and `XSMEM`, both equal 1 and 2 respectively. XPIPE is used for `algis::xsend` and `algis::xrecieve`, same with XSMEM (dont worry about this right now, ill explain it later)
+- the 5 main structs, `IpcHeader`, `IpcCmd`, `IpcReserve`, `IpcLog` and a enum `AlgisCmd`
+- each struct holds these
+```cpp
+struct IpcHeader {
+    char magic[10]; // stores "algis_ipc"
+    std::uint16_t transport;
+    std::uint32_t payload_size;
+};
+
+struct IpcCmd {
+    std::uint16_t cmd_id;
+    std::uint16_t flags;
+    std::uint64_t addr;
+    std::uint32_t size;
+    std::uint32_t reserved;
+};
+
+struct IpcReserve {
+    std::uint16_t cmd_id;     // mirrors the command that triggered this
+    ALGIS_STATUS  status;     // result
+    std::uint32_t size;       // size of data[] if any 
+	BYTE          data[512];  // response payload
+};
+
+struct IpcLog {
+	std::uint8_t  level;    // info, warn, error
+	std::uint32_t size;     // length of message
+	char          msg[512]; // the log string
+};
+
+enum class AlgisCmd : std::uint16_t {
+    AL_PING    = 0x01, // alive check, no payload (external->internal)
+	AL_DATA    = 0x02, // send data blob (external->internal)
+	AL_EXECUTE = 0x03, // stub, for the user to decide (external->internal)
+	AL_LOG     = 0x04, // logs to the ipc (internal->external)
+};
+```
+- most of this is common, now most of these are specific to the dispatcher, but ill talk about that later. first lets talk about the common ones
+- `struct IpcHeader`, holds three values. `char magic[10]` which stores the magic header "algis_ipc", `std::uint16_t transport` which is the transport type `XPIPE` or `XSMEM` and `std::uint32_t payload_size` which is just how big the data your sending is.
+- im going to go into the two main functions here, `algis::xsend` and `algis::xrecieve`, the other functions are easy to understand. they both look like this
+```cpp
+ALGIS_API xsend(int transport_type, LPCWSTR ipc_name, const void *data, size_t data_size);
+ALGIS_API xrecieve(int transport_type, LPCWSTR ipc_name, void *o_buffer, size_t buffer_size, DWORD *o_bytes_read, DWORD ms);
+```
+- `xsend` takes 4 args. transport_type `XPIPE` or `XSMEM`, name of IPC, the data, and size of data. `xsend` is for the client
+- `xrecieve` takes 6 args. transport_type, name of ipc, output buffer, buffer_size, output_bytes_read and timeout milliseconds. `xrecieve` is for the server
+- an example file will be listed [here]()
+
+## WHAT I AM PLANNING TO ADD
+- i want to add a lua/ branch to this
+- more QOL, more code clean up
+- i am also going to soon add videos to show proof that this works
+
+## LICENSE
 *check [LICENSE](https://github.com/bob-ham/algis/blob/master/LICENSE) for license details*
